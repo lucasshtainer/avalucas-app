@@ -11,6 +11,7 @@ export interface GalleryItem {
 export interface BeRealPost {
   id: string
   dateKey: string
+  user: 'Lucas' | 'Ava'
   url: string
   timestamp: number
   localDataUrl?: string

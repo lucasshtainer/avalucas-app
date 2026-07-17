@@ -9,6 +9,10 @@ export const ANNIVERSARY_START_DATE = '2026-01-31'
 /** Shared password gate — bundled into the app (not a loose .txt file) */
 export const APP_PASSWORD = 'ava123'
 
+/** BeReal slots — both share the same login; posts are labeled per person */
+export const BEREAL_USERS = ['Lucas', 'Ava'] as const
+export type BeRealUser = (typeof BEREAL_USERS)[number]
+
 /**
  * Daily BeReal notification time (24h clock, local timezone).
  * TODO: change if you want a different reminder hour.

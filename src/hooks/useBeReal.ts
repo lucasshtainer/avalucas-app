@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { BeRealUser } from '../config'
 import { todayKey } from '../lib/dates'
 import { api } from '../lib/api'
 import type { BeRealPost } from '../types'
@@ -7,13 +8,27 @@ const POLL_MS = 4000
 
 interface UseBeRealResult {
   posts: BeRealPost[]
-  todayPost: BeRealPost | undefined
-  history: BeRealPost[]
+  todayPosts: BeRealPost[]
+  historyDays: { dateKey: string; posts: BeRealPost[] }[]
   loading: boolean
   error: string | null
   posting: boolean
-  hasPostedToday: boolean
-  addPost: (opts: { dataUrl: string; mimeType: string }) => Promise<void>
+  getTodayPost: (user: BeRealUser) => BeRealPost | undefined
+  hasPostedToday: (user: BeRealUser) => boolean
+  addPost: (opts: {
+    dataUrl: string
+    mimeType: string
+    user: BeRealUser
+  }) => Promise<void>
+}
+
+function normalizePost(raw: BeRealPost & { user?: string }): BeRealPost {
+  if (raw.user === 'Lucas' || raw.user === 'Ava') return raw as BeRealPost
+  return {
+    ...raw,
+    user: 'Lucas',
+    id: `${raw.dateKey}_Lucas`,
+  }
 }
 
 export function useBeReal(): UseBeRealResult {
@@ -25,8 +40,8 @@ export function useBeReal(): UseBeRealResult {
 
   const refresh = useCallback(async () => {
     try {
-      const next = await api.get<BeRealPost[]>('/api/bereal')
-      setPosts(next)
+      const next = await api.get<Array<BeRealPost & { user?: string }>>('/api/bereal')
+      setPosts(next.map(normalizePost))
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load BeReal')
@@ -41,44 +56,63 @@ export function useBeReal(): UseBeRealResult {
     return () => window.clearInterval(t)
   }, [refresh])
 
-  const todayPost = useMemo(
-    () => posts.find((p) => p.dateKey === today),
+  const todayPosts = useMemo(
+    () => posts.filter((p) => p.dateKey === today),
     [posts, today],
   )
 
-  const history = useMemo(
-    () =>
-      posts
-        .filter((p) => p.dateKey !== today)
-        .sort((a, b) => (a.dateKey < b.dateKey ? 1 : -1)),
-    [posts, today],
-  )
-
-  const addPost = useCallback(async (opts: { dataUrl: string; mimeType: string }) => {
-    setPosting(true)
-    setError(null)
-    try {
-      const post = await api.post<BeRealPost>('/api/bereal', {
-        ...opts,
-        dateKey: todayKey(),
-      })
-      setPosts((prev) => [...prev.filter((p) => p.id !== post.id), post])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Post failed')
-      throw err
-    } finally {
-      setPosting(false)
+  const historyDays = useMemo(() => {
+    const byDay = new Map<string, BeRealPost[]>()
+    for (const post of posts) {
+      if (post.dateKey === today) continue
+      const list = byDay.get(post.dateKey) ?? []
+      list.push(post)
+      byDay.set(post.dateKey, list)
     }
-  }, [])
+    return Array.from(byDay.entries())
+      .sort(([a], [b]) => (a < b ? 1 : -1))
+      .map(([dateKey, dayPosts]) => ({ dateKey, posts: dayPosts }))
+  }, [posts, today])
+
+  const getTodayPost = useCallback(
+    (user: BeRealUser) => todayPosts.find((p) => p.user === user),
+    [todayPosts],
+  )
+
+  const hasPostedToday = useCallback(
+    (user: BeRealUser) => todayPosts.some((p) => p.user === user),
+    [todayPosts],
+  )
+
+  const addPost = useCallback(
+    async (opts: { dataUrl: string; mimeType: string; user: BeRealUser }) => {
+      setPosting(true)
+      setError(null)
+      try {
+        const post = await api.post<BeRealPost>('/api/bereal', {
+          ...opts,
+          dateKey: todayKey(),
+        })
+        setPosts((prev) => [...prev.filter((p) => p.id !== post.id), normalizePost(post)])
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Post failed')
+        throw err
+      } finally {
+        setPosting(false)
+      }
+    },
+    [],
+  )
 
   return {
     posts,
-    todayPost,
-    history,
+    todayPosts,
+    historyDays,
     loading,
     error,
     posting,
-    hasPostedToday: Boolean(todayPost),
+    getTodayPost,
+    hasPostedToday,
     addPost,
   }
 }

@@ -120,26 +120,43 @@ app.delete('/api/gallery/:id', (req, res) => {
 })
 
 // ——— BeReal ———
+function normalizeBeRealPosts(posts) {
+  let changed = false
+  const next = posts.map((p) => {
+    if (p.user === 'Lucas' || p.user === 'Ava') return p
+    // Legacy single-slot posts become Lucas's
+    changed = true
+    return {
+      ...p,
+      user: 'Lucas',
+      id: `${p.dateKey}_Lucas`,
+    }
+  })
+  if (changed) writeJson(META.bereal, next)
+  return next
+}
+
 app.get('/api/bereal', (_req, res) => {
-  res.json(readJson(META.bereal))
+  res.json(normalizeBeRealPosts(readJson(META.bereal)))
 })
 
 app.post('/api/bereal', (req, res) => {
   try {
-    const { dataUrl, mimeType, dateKey } = req.body || {}
-    if (!dataUrl || !dateKey) {
-      res.status(400).json({ error: 'dataUrl and dateKey are required' })
+    const { dataUrl, mimeType, dateKey, user } = req.body || {}
+    if (!dataUrl || !dateKey || (user !== 'Lucas' && user !== 'Ava')) {
+      res.status(400).json({ error: 'dataUrl, dateKey, and user (Lucas|Ava) are required' })
       return
     }
-    const posts = readJson(META.bereal)
-    if (posts.some((p) => p.dateKey === dateKey)) {
-      res.status(409).json({ error: "You've already posted today ♡" })
+    const posts = normalizeBeRealPosts(readJson(META.bereal))
+    if (posts.some((p) => p.dateKey === dateKey && p.user === user)) {
+      res.status(409).json({ error: `${user} already posted today ♡` })
       return
     }
     const { url } = saveDataUrl(dataUrl, 'bereal', mimeType)
     const post = {
-      id: dateKey,
+      id: `${dateKey}_${user}`,
       dateKey,
+      user,
       url,
       timestamp: Date.now(),
     }
