@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingSpinner } from '../components/LoadingSpinner'
@@ -8,9 +8,10 @@ import { pickGalleryMedia } from '../lib/media'
 import type { GalleryItem } from '../types'
 
 export function Gallery() {
-  const { grouped, items, loading, error, uploading, addMedia } = useGallery()
+  const { grouped, items, loading, error, uploading, addMedia, removeItem } = useGallery()
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
   const [busyError, setBusyError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const openItem = (item: GalleryItem) => {
     const idx = items.findIndex((i) => i.id === item.id)
@@ -29,6 +30,26 @@ export function Gallery() {
     } catch (err) {
       if (err instanceof Error && err.message === 'Cancelled') return
       setBusyError(err instanceof Error ? err.message : 'Could not add media')
+    }
+  }
+
+  const handleDelete = async (id: string, index: number) => {
+    if (deleting) return
+    const ok = window.confirm('Delete this forever?')
+    if (!ok) return
+    setDeleting(true)
+    setBusyError(null)
+    try {
+      await removeItem(id)
+      if (items.length <= 1) {
+        setViewerIndex(null)
+      } else if (index >= items.length - 1) {
+        setViewerIndex(index - 1)
+      }
+    } catch (err) {
+      setBusyError(err instanceof Error ? err.message : 'Could not delete')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -99,8 +120,10 @@ export function Gallery() {
           <Viewer
             items={items}
             index={viewerIndex}
+            deleting={deleting}
             onClose={() => setViewerIndex(null)}
             onIndex={setViewerIndex}
+            onDelete={(id) => handleDelete(id, viewerIndex)}
           />
         )}
       </AnimatePresence>
@@ -111,13 +134,17 @@ export function Gallery() {
 function Viewer({
   items,
   index,
+  deleting,
   onClose,
   onIndex,
+  onDelete,
 }: {
   items: GalleryItem[]
   index: number
+  deleting: boolean
   onClose: () => void
   onIndex: (i: number) => void
+  onDelete: (id: string) => void
 }) {
   const item = items[index]
   const src = resolveMediaUrl(item)
@@ -145,7 +172,15 @@ function Viewer({
         <p className="text-sm text-lavender/70">
           {index + 1} / {items.length}
         </p>
-        <div className="w-10" />
+        <button
+          type="button"
+          onClick={() => onDelete(item.id)}
+          disabled={deleting}
+          className="rounded-full p-2 text-gold-soft disabled:opacity-40"
+          aria-label="Delete image"
+        >
+          <Trash2 className="h-5 w-5" />
+        </button>
       </div>
       <div className="relative flex flex-1 items-center justify-center px-2">
         <button
@@ -181,7 +216,7 @@ function Viewer({
           <ChevronRight />
         </button>
       </div>
-      <p className="pb-8 text-center text-xs text-white/40">Swipe to browse</p>
+      <p className="pb-8 text-center text-xs text-white/40">Swipe to browse · tap trash to delete</p>
     </motion.div>
   )
 }
