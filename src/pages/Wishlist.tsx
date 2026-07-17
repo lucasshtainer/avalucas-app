@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ExternalLink, Heart, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import type { PartnerName } from '../config'
 import { EmptyState } from '../components/EmptyState'
 import { GlassCard } from '../components/GlassCard'
 import { LoadingSpinner } from '../components/LoadingSpinner'
@@ -11,7 +10,7 @@ import type { WishlistItem } from '../types'
 
 const EMOJI_PICKS = ['👗', '✨', '🎁', '🌙', '☕', '🎧', '🏠', '💐', '🧸', '✈️']
 
-export function Wishlist({ identity }: { identity: PartnerName }) {
+export function Wishlist() {
   const {
     sections,
     loading,
@@ -101,9 +100,7 @@ export function Wishlist({ identity }: { identity: PartnerName }) {
               type="button"
               onClick={() => setActiveSection(s.id)}
               className={`shrink-0 rounded-2xl px-3 py-2 text-sm ${
-                active
-                  ? 'bg-purple-deep text-white'
-                  : 'glass text-lavender/80'
+                active ? 'bg-purple-deep text-white' : 'glass text-lavender/80'
               }`}
             >
               <span className="mr-1">{s.emoji}</span>
@@ -139,10 +136,9 @@ export function Wishlist({ identity }: { identity: PartnerName }) {
               <WishlistCard
                 key={item.id}
                 item={item}
-                identity={identity}
                 onGifted={() => markGifted(item.id)}
                 onDelete={() => deleteItem(item.id)}
-                onHeart={() => toggleHeart(item.id, identity)}
+                onHeart={() => toggleHeart(item.id)}
               />
             ))}
           </AnimatePresence>
@@ -169,11 +165,10 @@ export function Wishlist({ identity }: { identity: PartnerName }) {
                     <WishlistCard
                       key={item.id}
                       item={item}
-                      identity={identity}
                       gifted
                       onGifted={() => undefined}
                       onDelete={() => deleteItem(item.id)}
-                      onHeart={() => toggleHeart(item.id, identity)}
+                      onHeart={() => toggleHeart(item.id)}
                     />
                   ))}
                 </motion.div>
@@ -270,22 +265,17 @@ export function Wishlist({ identity }: { identity: PartnerName }) {
 
 function WishlistCard({
   item,
-  identity,
   gifted = false,
   onGifted,
   onDelete,
   onHeart,
 }: {
   item: WishlistItem
-  identity: PartnerName
   gifted?: boolean
   onGifted: () => void
   onDelete: () => void
   onHeart: () => void
 }) {
-  const hearted = item.heartedBy.includes(identity)
-  const someoneOnIt = item.heartedBy.length > 0
-
   return (
     <motion.div
       layout
@@ -315,19 +305,15 @@ function WishlistCard({
         )}
         {item.note && <p className="mt-1 text-sm text-white/55">{item.note}</p>}
         {item.price && <p className="mt-1 text-sm text-gold-soft">{item.price}</p>}
-        {someoneOnIt && (
-          <p className="mt-2 text-xs text-lavender/70">
-            {item.heartedBy.join(' & ')} {item.heartedBy.length > 1 ? 'are' : 'is'} on it 👀
-          </p>
-        )}
+        {item.hearted && <p className="mt-2 text-xs text-lavender/70">Saved with love ♡</p>}
         <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
             onClick={onHeart}
-            className={`rounded-xl px-3 py-2 text-sm ${hearted ? 'bg-purple-deep text-white' : 'bg-white/5 text-lavender'}`}
-            aria-label="I'm on it"
+            className={`rounded-xl px-3 py-2 text-sm ${item.hearted ? 'bg-purple-deep text-white' : 'bg-white/5 text-lavender'}`}
+            aria-label="Heart"
           >
-            <Heart className={`inline h-4 w-4 ${hearted ? 'fill-current' : ''}`} />
+            <Heart className={`inline h-4 w-4 ${item.hearted ? 'fill-current' : ''}`} />
           </button>
           {!gifted && (
             <button

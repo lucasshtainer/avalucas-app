@@ -1,26 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore'
-import { STORAGE_KEYS, type PartnerName } from '../config'
-import { db, isFirebaseConfigured } from '../firebase'
 import { todayKey } from '../lib/dates'
-import { readJson, writeJson } from '../lib/localStore'
-import { uploadMedia } from '../lib/upload'
+import { api } from '../lib/api'
 import type { BeRealPost } from '../types'
+
+const POLL_MS = 4000
 
 interface UseBeRealResult {
   posts: BeRealPost[]
-  todayPosts: BeRealPost[]
-  historyDays: { dateKey: string; posts: BeRealPost[] }[]
+  todayPost: BeRealPost | undefined
+  history: BeRealPost[]
   loading: boolean
   error: string | null
   posting: boolean
-  hasPostedToday: (user: PartnerName) => boolean
-  getTodayPost: (user: PartnerName) => BeRealPost | undefined
-  addPost: (opts: {
-    dataUrl: string
-    mimeType: string
-    user: PartnerName
-  }) => Promise<void>
+  hasPostedToday: boolean
+  addPost: (opts: { dataUrl: string; mimeType: string }) => Promise<void>
 }
 
 export function useBeReal(): UseBeRealResult {
@@ -30,106 +23,62 @@ export function useBeReal(): UseBeRealResult {
   const [posting, setPosting] = useState(false)
   const today = todayKey()
 
-  useEffect(() => {
-    if (!isFirebaseConfigured() || !db) {
-      setPosts(readJson<BeRealPost[]>(STORAGE_KEYS.localBeReal, []))
+  const refresh = useCallback(async () => {
+    try {
+      const next = await api.get<BeRealPost[]>('/api/bereal')
+      setPosts(next)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load BeReal')
+    } finally {
       setLoading(false)
-      return
     }
-
-    const unsub = onSnapshot(
-      collection(db, 'bereal'),
-      (snap) => {
-        const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BeRealPost)
-        setPosts(next)
-        setLoading(false)
-        setError(null)
-      },
-      (err) => {
-        setError(err.message)
-        setLoading(false)
-      },
-    )
-    return unsub
   }, [])
 
-  const todayPosts = useMemo(
-    () => posts.filter((p) => p.dateKey === today),
+  useEffect(() => {
+    void refresh()
+    const t = window.setInterval(() => void refresh(), POLL_MS)
+    return () => window.clearInterval(t)
+  }, [refresh])
+
+  const todayPost = useMemo(
+    () => posts.find((p) => p.dateKey === today),
     [posts, today],
   )
 
-  const historyDays = useMemo(() => {
-    const byDay = new Map<string, BeRealPost[]>()
-    for (const post of posts) {
-      if (post.dateKey === today) continue
-      const list = byDay.get(post.dateKey) ?? []
-      list.push(post)
-      byDay.set(post.dateKey, list)
+  const history = useMemo(
+    () =>
+      posts
+        .filter((p) => p.dateKey !== today)
+        .sort((a, b) => (a.dateKey < b.dateKey ? 1 : -1)),
+    [posts, today],
+  )
+
+  const addPost = useCallback(async (opts: { dataUrl: string; mimeType: string }) => {
+    setPosting(true)
+    setError(null)
+    try {
+      const post = await api.post<BeRealPost>('/api/bereal', {
+        ...opts,
+        dateKey: todayKey(),
+      })
+      setPosts((prev) => [...prev.filter((p) => p.id !== post.id), post])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Post failed')
+      throw err
+    } finally {
+      setPosting(false)
     }
-    return Array.from(byDay.entries())
-      .sort(([a], [b]) => (a < b ? 1 : -1))
-      .map(([dateKey, dayPosts]) => ({ dateKey, posts: dayPosts }))
-  }, [posts, today])
-
-  const hasPostedToday = useCallback(
-    (user: PartnerName) => todayPosts.some((p) => p.user === user),
-    [todayPosts],
-  )
-
-  const getTodayPost = useCallback(
-    (user: PartnerName) => todayPosts.find((p) => p.user === user),
-    [todayPosts],
-  )
-
-  const addPost = useCallback(
-    async (opts: { dataUrl: string; mimeType: string; user: PartnerName }) => {
-      setPosting(true)
-      setError(null)
-      try {
-        const dateKey = todayKey()
-        const existing = readJson<BeRealPost[]>(STORAGE_KEYS.localBeReal, [])
-        const all = isFirebaseConfigured() ? posts : existing
-        if (all.some((p) => p.dateKey === dateKey && p.user === opts.user)) {
-          throw new Error("You've already posted today ♡")
-        }
-
-        const url = await uploadMedia(opts.dataUrl, 'bereal', opts.mimeType)
-        const post: BeRealPost = {
-          id: `${dateKey}_${opts.user}`,
-          dateKey,
-          user: opts.user,
-          url,
-          timestamp: Date.now(),
-          localDataUrl: isFirebaseConfigured() ? undefined : opts.dataUrl,
-        }
-
-        if (isFirebaseConfigured() && db) {
-          const { localDataUrl: _, ...payload } = post
-          await setDoc(doc(db, 'bereal', post.id), payload)
-        } else {
-          const next = [...existing.filter((p) => p.id !== post.id), post]
-          writeJson(STORAGE_KEYS.localBeReal, next)
-          setPosts(next)
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Post failed')
-        throw err
-      } finally {
-        setPosting(false)
-      }
-    },
-    [posts],
-  )
+  }, [])
 
   return {
     posts,
-    todayPosts,
-    historyDays,
+    todayPost,
+    history,
     loading,
     error,
     posting,
-    hasPostedToday,
-    getTodayPost,
+    hasPostedToday: Boolean(todayPost),
     addPost,
   }
 }

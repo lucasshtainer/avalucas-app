@@ -3,13 +3,12 @@ import { useCallback, useState } from 'react'
 import { LoadingSpinner } from './components/LoadingSpinner'
 import { useAuth } from './hooks/useAuth'
 import type { AppScreen } from './types'
-import { Identity } from './pages/Identity'
 import { Intro } from './pages/Intro'
 import { Login } from './pages/Login'
 import { MainApp } from './pages/MainApp'
 
 export default function App() {
-  const { ready, isAuthenticated, identity, login, setIdentity } = useAuth()
+  const { ready, isAuthenticated, login } = useAuth()
   const [introDone, setIntroDone] = useState(false)
 
   const finishIntro = useCallback(() => {
@@ -24,13 +23,7 @@ export default function App() {
     )
   }
 
-  const activeScreen: AppScreen = !introDone
-    ? 'intro'
-    : !isAuthenticated
-      ? 'login'
-      : !identity
-        ? 'identity'
-        : 'main'
+  const activeScreen: AppScreen = !introDone ? 'intro' : !isAuthenticated ? 'login' : 'main'
 
   return (
     <div className="mx-auto h-full max-w-md overflow-hidden bg-night text-white shadow-2xl">
@@ -45,8 +38,7 @@ export default function App() {
         >
           {activeScreen === 'intro' && <Intro onDone={finishIntro} />}
           {activeScreen === 'login' && <Login onLogin={login} />}
-          {activeScreen === 'identity' && <Identity onPick={setIdentity} />}
-          {activeScreen === 'main' && identity && <MainApp identity={identity} />}
+          {activeScreen === 'main' && <MainApp />}
         </motion.div>
       </AnimatePresence>
     </div>

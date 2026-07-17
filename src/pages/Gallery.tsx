@@ -1,14 +1,13 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
-import type { PartnerName } from '../config'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { resolveMediaUrl, useGallery } from '../hooks/useGallery'
 import { pickGalleryMedia } from '../lib/media'
 import type { GalleryItem } from '../types'
 
-export function Gallery({ identity }: { identity: PartnerName }) {
+export function Gallery() {
   const { grouped, items, loading, error, uploading, addMedia } = useGallery()
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
   const [busyError, setBusyError] = useState<string | null>(null)
@@ -26,7 +25,6 @@ export function Gallery({ identity }: { identity: PartnerName }) {
         dataUrl: media.dataUrl,
         type: media.type,
         mimeType: media.mimeType,
-        uploader: identity,
       })
     } catch (err) {
       if (err instanceof Error && err.message === 'Cancelled') return
@@ -183,7 +181,7 @@ function Viewer({
           <ChevronRight />
         </button>
       </div>
-      <p className="pb-8 text-center text-xs text-white/40">Added by {item.uploader}</p>
+      <p className="pb-8 text-center text-xs text-white/40">Swipe to browse</p>
     </motion.div>
   )
 }

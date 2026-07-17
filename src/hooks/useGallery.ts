@@ -1,20 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-} from 'firebase/firestore'
-import { STORAGE_KEYS, type PartnerName } from '../config'
-import { db, isFirebaseConfigured } from '../firebase'
-import { createId } from '../lib/id'
-import { readJson, writeJson } from '../lib/localStore'
-import { uploadMedia } from '../lib/upload'
-import type { GalleryItem, MediaType } from '../types'
 import { formatMonthYear } from '../lib/dates'
+import { api } from '../lib/api'
+import type { GalleryItem, MediaType } from '../types'
+
+const POLL_MS = 4000
 
 interface UseGalleryResult {
   items: GalleryItem[]
@@ -26,13 +15,9 @@ interface UseGalleryResult {
     dataUrl: string
     type: MediaType
     mimeType: string
-    uploader: PartnerName
   }) => Promise<void>
   removeItem: (id: string) => Promise<void>
-}
-
-function sortNewest(a: GalleryItem, b: GalleryItem) {
-  return b.timestamp - a.timestamp
+  refresh: () => Promise<void>
 }
 
 export function useGallery(): UseGalleryResult {
@@ -41,62 +26,31 @@ export function useGallery(): UseGalleryResult {
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
 
-  useEffect(() => {
-    if (!isFirebaseConfigured() || !db) {
-      setItems(readJson<GalleryItem[]>(STORAGE_KEYS.localGallery, []).sort(sortNewest))
+  const refresh = useCallback(async () => {
+    try {
+      const next = await api.get<GalleryItem[]>('/api/gallery')
+      setItems(next)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load gallery')
+    } finally {
       setLoading(false)
-      return
     }
-
-    const q = query(collection(db, 'gallery'), orderBy('timestamp', 'desc'))
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as GalleryItem)
-        setItems(next)
-        setLoading(false)
-        setError(null)
-      },
-      (err) => {
-        setError(err.message)
-        setLoading(false)
-      },
-    )
-    return unsub
   }, [])
 
-  const persistLocal = useCallback((next: GalleryItem[]) => {
-    writeJson(STORAGE_KEYS.localGallery, next)
-    setItems(next)
-  }, [])
+  useEffect(() => {
+    void refresh()
+    const t = window.setInterval(() => void refresh(), POLL_MS)
+    return () => window.clearInterval(t)
+  }, [refresh])
 
   const addMedia = useCallback(
-    async (opts: {
-      dataUrl: string
-      type: MediaType
-      mimeType: string
-      uploader: PartnerName
-    }) => {
+    async (opts: { dataUrl: string; type: MediaType; mimeType: string }) => {
       setUploading(true)
       setError(null)
       try {
-        const url = await uploadMedia(opts.dataUrl, 'gallery', opts.mimeType)
-        const item: GalleryItem = {
-          id: createId('gal'),
-          url,
-          type: opts.type,
-          timestamp: Date.now(),
-          uploader: opts.uploader,
-          localDataUrl: isFirebaseConfigured() ? undefined : opts.dataUrl,
-        }
-
-        if (isFirebaseConfigured() && db) {
-          const { localDataUrl: _, ...payload } = item
-          await setDoc(doc(db, 'gallery', item.id), payload)
-        } else {
-          const next = [item, ...readJson<GalleryItem[]>(STORAGE_KEYS.localGallery, [])]
-          persistLocal(next)
-        }
+        const item = await api.post<GalleryItem>('/api/gallery', opts)
+        setItems((prev) => [item, ...prev.filter((i) => i.id !== item.id)])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Upload failed')
         throw err
@@ -104,20 +58,13 @@ export function useGallery(): UseGalleryResult {
         setUploading(false)
       }
     },
-    [persistLocal],
+    [],
   )
 
-  const removeItem = useCallback(
-    async (id: string) => {
-      if (isFirebaseConfigured() && db) {
-        await deleteDoc(doc(db, 'gallery', id))
-      } else {
-        const next = readJson<GalleryItem[]>(STORAGE_KEYS.localGallery, []).filter((i) => i.id !== id)
-        persistLocal(next)
-      }
-    },
-    [persistLocal],
-  )
+  const removeItem = useCallback(async (id: string) => {
+    await api.delete(`/api/gallery/${id}`)
+    setItems((prev) => prev.filter((i) => i.id !== id))
+  }, [])
 
   const grouped = useMemo(() => {
     const map = new Map<string, GalleryItem[]>()
@@ -133,7 +80,7 @@ export function useGallery(): UseGalleryResult {
     }))
   }, [items])
 
-  return { items, grouped, loading, error, uploading, addMedia, removeItem }
+  return { items, grouped, loading, error, uploading, addMedia, removeItem, refresh }
 }
 
 export function resolveMediaUrl(item: Pick<GalleryItem, 'url' | 'localDataUrl'>): string {

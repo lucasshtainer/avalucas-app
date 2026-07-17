@@ -1,5 +1,3 @@
-import type { PartnerName } from './config'
-
 export type MediaType = 'photo' | 'video'
 
 export interface GalleryItem {
@@ -7,15 +5,12 @@ export interface GalleryItem {
   url: string
   type: MediaType
   timestamp: number
-  uploader: PartnerName
-  /** Optional data URL / local blob for offline fallback */
   localDataUrl?: string
 }
 
 export interface BeRealPost {
   id: string
   dateKey: string
-  user: PartnerName
   url: string
   timestamp: number
   localDataUrl?: string
@@ -40,9 +35,9 @@ export interface WishlistItem {
   price?: string
   url?: string
   status: WishlistStatus
-  heartedBy: PartnerName[]
+  hearted: boolean
   createdAt: number
 }
 
-export type AppScreen = 'intro' | 'login' | 'identity' | 'main'
+export type AppScreen = 'intro' | 'login' | 'main'
 export type MainTab = 'gallery' | 'bereal' | 'wishlist' | 'memories'
