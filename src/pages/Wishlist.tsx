@@ -187,7 +187,7 @@ export function Wishlist({ identity }: { identity: PartnerName }) {
         type="button"
         whileTap={{ scale: 0.92 }}
         onClick={() => setShowAddItem(true)}
-        className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-purple-deep shadow-lg shadow-purple-deep/40"
+        className="fixed bottom-32 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-purple-deep shadow-lg shadow-purple-deep/40"
         aria-label="Add wishlist item"
       >
         <Plus className="h-7 w-7 text-white" />

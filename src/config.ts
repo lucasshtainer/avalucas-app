@@ -3,8 +3,8 @@
  * Edit these before shipping to her phone ♡
  */
 
-/** TODO: set your actual relationship start date (YYYY-MM-DD) */
-export const ANNIVERSARY_START_DATE = '2026-01-14'
+/** Relationship start date (YYYY-MM-DD) — set so the counter matches your real days together */
+export const ANNIVERSARY_START_DATE = '2026-01-31'
 
 /** Shared password gate — bundled into the app (not a loose .txt file) */
 export const APP_PASSWORD = 'ava123'
